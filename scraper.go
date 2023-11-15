@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/gocolly/colly" 
+	"encoding/csv" 
+	"log" 
+	"os" 
 )
 
 type ShopProduct struct {
@@ -40,6 +43,36 @@ func main() {
 	})
 	
 	c.Visit("https://scrapeme.live/shop/")
+
+	file, err := os.Create("export/products.csv")
+	if err != nil {
+		log.Fatalln("Failed to create output CSV file", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+
+	headers := []string{
+		"url",
+		"image",
+		"name",
+		"price",
+	}
+
+	writer.Write(headers)
+
+	for _, shopProduct := range shopProducts {
+		record := []string{
+			shopProduct.url,
+			shopProduct.image,
+			shopProduct.name,
+			shopProduct.price,
+		}
+
+		writer.Write(record)
+	}
+	
+	defer writer.Flush()
 
 	fmt.Printf("%v", shopProducts)
 }
