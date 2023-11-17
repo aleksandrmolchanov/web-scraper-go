@@ -16,8 +16,31 @@ func main() {
 	fmt.Println("Start scraper...")
 
 	var shopProducts []ShopProduct
+	var pagesToScrape []string
+
+	pageToScrape := "https://scrapeme.live/shop/page/1/" 
+	pagesDiscovered := []string{ pageToScrape }
+	i := 1
+	limit := 5
 
 	c := colly.NewCollector()
+
+	c.OnHTML("a.page-numbers", func(e *colly.HTMLElement) {
+		newPaginationLink := e.Attr("href")
+
+		/*if !contains(pagesToScrape, newPaginationLink) {
+			if !contains(pagesDiscovered, newPaginationLink) {
+				pagesToScrape = append(pagesToScrape, newPaginationLink)
+			}
+			pagesDiscovered = append(pagesDiscovered, newPaginationLink)
+		}*/
+
+		if !contains(pagesDiscovered, newPaginationLink) {
+			pagesToScrape = append(pagesToScrape, newPaginationLink)
+			pagesDiscovered = append(pagesDiscovered, newPaginationLink)
+		}
+			
+	})
 
 	c.OnRequest(func(r *colly.Request) {
 		fmt.Println("Visiting: ", r.URL)
@@ -41,8 +64,19 @@ func main() {
 
 		shopProducts = append(shopProducts, shopProduct)
 	})
+
+	c.OnScraped(func(response *colly.Response) {
+		if len(pagesToScrape) != 0 && i < limit {
+			pageToScrape = pagesToScrape[0]
+			pagesToScrape = pagesToScrape[1:]
+
+			i++
+
+			c.Visit(pageToScrape)
+		}
+	})
 	
-	c.Visit("https://scrapeme.live/shop/")
+	c.Visit(pageToScrape)
 
 	file, err := os.Create("export/products.csv")
 	if err != nil {
@@ -75,4 +109,14 @@ func main() {
 	defer writer.Flush()
 
 	fmt.Printf("%v", shopProducts)
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
 }
