@@ -25,6 +25,8 @@ func main() {
 
 	c := colly.NewCollector()
 
+	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; rv:113.0) Gecko/20100101 Firefox/113.0"
+
 	c.OnHTML("a.page-numbers", func(e *colly.HTMLElement) {
 		newPaginationLink := e.Attr("href")
 
