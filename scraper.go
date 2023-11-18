@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
+	"encoding/csv"
 	"fmt"
-	"github.com/gocolly/colly" 
-	"encoding/csv" 
-	"log" 
-	"os" 
+	"log"
+	"os"
+
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/chromedp"
 )
 
 type ShopProduct struct {
@@ -16,69 +19,37 @@ func main() {
 	fmt.Println("Start scraper...")
 
 	var shopProducts []ShopProduct
-	var pagesToScrape []string
 
-	pageToScrape := "https://scrapeme.live/shop/page/1/" 
-	pagesDiscovered := []string{ pageToScrape }
-	i := 1
-	limit := 5
+	ctx, cancel := chromedp.NewContext(
+		context.Background(),
+		chromedp.WithLogf(log.Printf),
+	)
+	defer cancel()
 
-	c := colly.NewCollector()
+	var nodes []*cdp.Node
+	chromedp.Run(ctx,
+		chromedp.Navigate("https://scrapeme.live/shop/"),
+		chromedp.Nodes(".product", &nodes, chromedp.ByQueryAll),
+	)
 
-	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; rv:113.0) Gecko/20100101 Firefox/113.0"
+	var url, image, name, price string
+	for _, node := range nodes {
+		chromedp.Run(ctx,
+			chromedp.AttributeValue("a", "href", &url, nil, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.AttributeValue("img", "src", &image, nil, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text("h2", &name, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text(".price", &price, chromedp.ByQuery, chromedp.FromNode(node)),
+		)
 
-	c.OnHTML("a.page-numbers", func(e *colly.HTMLElement) {
-		newPaginationLink := e.Attr("href")
-
-		/*if !contains(pagesToScrape, newPaginationLink) {
-			if !contains(pagesDiscovered, newPaginationLink) {
-				pagesToScrape = append(pagesToScrape, newPaginationLink)
-			}
-			pagesDiscovered = append(pagesDiscovered, newPaginationLink)
-		}*/
-
-		if !contains(pagesDiscovered, newPaginationLink) {
-			pagesToScrape = append(pagesToScrape, newPaginationLink)
-			pagesDiscovered = append(pagesDiscovered, newPaginationLink)
-		}
-			
-	})
-
-	c.OnRequest(func(r *colly.Request) {
-		fmt.Println("Visiting: ", r.URL)
-	})
-
-	c.OnError(func(_ *colly.Response, err error) {
-		fmt.Println("Something went wrong: ", err)
-	})
-	
-	c.OnResponse(func(r *colly.Response) {
-		fmt.Println("Visited: ", r.Request.URL)
-	})
-
-	c.OnHTML("li.product", func(e *colly.HTMLElement) {
 		shopProduct := ShopProduct{}
-		
-		shopProduct.url = e.ChildAttr("a", "href")
-		shopProduct.image = e.ChildAttr("img", "src")
-		shopProduct.name = e.ChildText("h2")
-		shopProduct.price = e.ChildText(".price")
+
+		shopProduct.url = url
+		shopProduct.image = image
+		shopProduct.name = name
+		shopProduct.price = price
 
 		shopProducts = append(shopProducts, shopProduct)
-	})
-
-	c.OnScraped(func(response *colly.Response) {
-		if len(pagesToScrape) != 0 && i < limit {
-			pageToScrape = pagesToScrape[0]
-			pagesToScrape = pagesToScrape[1:]
-
-			i++
-
-			c.Visit(pageToScrape)
-		}
-	})
-	
-	c.Visit(pageToScrape)
+	}
 
 	file, err := os.Create("export/products.csv")
 	if err != nil {
@@ -107,18 +78,8 @@ func main() {
 
 		writer.Write(record)
 	}
-	
+
 	defer writer.Flush()
 
 	fmt.Printf("%v", shopProducts)
-}
-
-func contains(s []string, str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-
-	return false
 }
